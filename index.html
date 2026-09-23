@@ -99,7 +99,6 @@
 </div>
 
 <script>
-    // Connected to your live Vercel backend endpoint
     const BACKEND_API_URL = 'https://ytdl-backend-pi.vercel.app/api/download';
 
     async function startDownload() {
@@ -114,29 +113,50 @@
         }
 
         btn.disabled = true;
-        status.innerText = 'Processing video on serverless backend...';
+        status.innerText = 'Extracting video link...';
         status.style.color = '#94a3b8';
 
         try {
+            // Route 1: Try Primary Vercel Serverless Endpoint
             const response = await fetch(BACKEND_API_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: urlInput })
             });
 
             const data = await response.json();
 
-            if (data.downloadUrl) {
+            if (response.ok && data.downloadUrl) {
                 status.innerText = 'Starting download: ' + (data.title || 'Video');
                 status.style.color = '#22c55e';
-                
-                // Redirects browser directly to the media stream URL
                 window.location.href = data.downloadUrl;
-            } else {
-                throw new Error(data.error || 'Failed to extract download URL.');
+                return;
             }
+
+            // Route 2: Fallback if Vercel server IP is flagged by YouTube bot detection
+            status.innerText = 'Bypassing YouTube bot detection...';
+            const videoIdMatch = urlInput.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|v\/))([\w-]{11})/);
+            
+            if (videoIdMatch && videoIdMatch[1]) {
+                const videoId = videoIdMatch[1];
+                const fallbackRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
+                
+                if (fallbackRes.ok) {
+                    const fallbackData = await fallbackRes.json();
+                    const streams = fallbackData.videoStreams || [];
+                    const bestStream = streams.find(s => s.hasVideo && s.hasAudio) || streams[0];
+
+                    if (bestStream && bestStream.url) {
+                        status.innerText = 'Download starting!';
+                        status.style.color = '#22c55e';
+                        window.location.href = bestStream.url;
+                        return;
+                    }
+                }
+            }
+
+            throw new Error(data.error || 'Unable to bypass YouTube sign-in block.');
+
         } catch (err) {
             console.error(err);
             status.innerText = 'Error: ' + err.message;
