@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Media Downloader</title>
+    <title>Local Video Downloader</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -23,7 +23,11 @@
             width: 100%;
             max-width: 480px;
         }
-        h1 { font-size: 1.5rem; margin-bottom: 1rem; text-align: center; }
+        h1 { 
+            font-size: 1.5rem; 
+            margin-bottom: 1rem; 
+            text-align: center; 
+        }
         input {
             width: 100%;
             padding: 12px;
@@ -43,9 +47,22 @@
             color: white;
             font-weight: bold;
             cursor: pointer;
+            transition: background 0.2s;
         }
-        button:disabled { background: #64748b; cursor: not-allowed; }
-        #status { margin-top: 1rem; font-size: 0.9rem; text-align: center; color: #94a3b8; }
+        button:hover {
+            background: #2563eb;
+        }
+        button:disabled { 
+            background: #64748b; 
+            cursor: not-allowed; 
+        }
+        #status { 
+            margin-top: 1rem; 
+            font-size: 0.9rem; 
+            text-align: center; 
+            color: #94a3b8; 
+            word-break: break-word;
+        }
     </style>
 </head>
 <body>
@@ -59,36 +76,53 @@
 
 <script>
     async function startDownload() {
-        const url = document.getElementById('videoUrl').value.trim();
+        const urlInput = document.getElementById('videoUrl').value.trim();
         const status = document.getElementById('status');
         const btn = document.getElementById('downloadBtn');
 
-        if (!url) return alert('Please enter a URL');
+        if (!urlInput) {
+            status.innerText = 'Please enter a URL';
+            status.style.color = '#ef4444';
+            return;
+        }
 
         btn.disabled = true;
-        status.innerText = 'Processing video on local server...';
+        status.innerText = 'Fetching download link...';
+        status.style.color = '#94a3b8';
 
         try {
-            const response = await fetch('/api/download', {
+            // Send request to Cobalt public API
+            const response = await fetch('https://api.cobalt.tools/api/json', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: urlInput,
+                    videoQuality: '720'
+                })
             });
 
-            if (!response.ok) throw new Error('Download failed');
+            const data = await response.json();
 
-            const blob = await response.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = 'video.mp4';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-
-            status.innerText = 'Download complete!';
+            if (data.status === 'stream' || data.status === 'redirect') {
+                status.innerText = 'Download starting...';
+                status.style.color = '#22c55e';
+                
+                // Redirect browser to trigger direct download
+                window.location.href = data.url;
+            } else if (data.status === 'picker') {
+                status.innerText = 'Multiple items found. Opening first link...';
+                status.style.color = '#22c55e';
+                window.location.href = data.picker[0].url;
+            } else {
+                throw new Error(data.text || 'Unable to process video URL.');
+            }
         } catch (err) {
-            status.innerText = 'Error downloading video. Check server logs.';
+            console.error(err);
+            status.innerText = 'Error: ' + err.message;
+            status.style.color = '#ef4444';
         } finally {
             btn.disabled = false;
         }
