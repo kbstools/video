@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Downloader</title>
     <style>
-        * {
-            box-sizing: border-box;
-        }
-
+        * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: #0f172a;
@@ -20,27 +17,15 @@
             margin: 0;
             padding: 20px;
         }
-
         .card {
             background: #1e293b;
             padding: 2rem;
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             width: 100%;
-            max-width: 480px;
+            max-width: 520px;
         }
-
-        h1 {
-            font-size: 1.5rem;
-            margin-top: 0;
-            margin-bottom: 1.5rem;
-            text-align: center;
-        }
-
-        .input-group {
-            margin-bottom: 1rem;
-        }
-
+        h1 { font-size: 1.5rem; margin-top: 0; margin-bottom: 1.5rem; text-align: center; }
         input {
             width: 100%;
             padding: 12px;
@@ -50,12 +35,8 @@
             color: white;
             font-size: 14px;
             outline: none;
+            margin-bottom: 1rem;
         }
-
-        input:focus {
-            border-color: #3b82f6;
-        }
-
         button {
             width: 100%;
             padding: 12px;
@@ -66,104 +47,51 @@
             font-size: 15px;
             font-weight: bold;
             cursor: pointer;
-            transition: background 0.2s;
         }
-
-        button:hover {
-            background: #2563eb;
-        }
-
-        button:disabled {
-            background: #64748b;
-            cursor: not-allowed;
-        }
-
-        #status {
+        iframe {
+            width: 100%;
+            height: 180px;
+            border: none;
+            border-radius: 8px;
             margin-top: 1rem;
-            font-size: 0.9rem;
-            text-align: center;
-            color: #94a3b8;
-            word-break: break-word;
+            display: none;
+            background: #0f172a;
         }
+        #status { margin-top: 1rem; font-size: 0.9rem; text-align: center; color: #94a3b8; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h1>Video Downloader</h1>
-    <div class="input-group">
-        <input type="text" id="videoUrl" placeholder="Paste YouTube Video URL..." />
-    </div>
-    <button id="downloadBtn" onclick="startDownload()">Download Video</button>
+    <input type="text" id="videoUrl" placeholder="Paste YouTube Video URL..." />
+    <button onclick="generateDownload()">Get Download Links</button>
     <div id="status"></div>
+    <iframe id="downloadFrame"></iframe>
 </div>
 
 <script>
-    const BACKEND_API_URL = 'https://ytdl-backend-pi.vercel.app/api/download';
-
-    async function startDownload() {
+    function generateDownload() {
         const urlInput = document.getElementById('videoUrl').value.trim();
         const status = document.getElementById('status');
-        const btn = document.getElementById('downloadBtn');
+        const frame = document.getElementById('downloadFrame');
 
-        if (!urlInput) {
-            status.innerText = 'Please enter a URL';
+        const videoIdMatch = urlInput.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|v\/))([\w-]{11})/);
+
+        if (!videoIdMatch || !videoIdMatch[1]) {
+            status.innerText = 'Please enter a valid YouTube URL.';
             status.style.color = '#ef4444';
+            frame.style.display = 'none';
             return;
         }
 
-        btn.disabled = true;
-        status.innerText = 'Extracting video link...';
-        status.style.color = '#94a3b8';
+        const videoId = videoIdMatch[1];
+        status.innerText = 'Loading download widget...';
+        status.style.color = '#22c55e';
 
-        try {
-            // Route 1: Try Primary Vercel Serverless Endpoint
-            const response = await fetch(BACKEND_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: urlInput })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.downloadUrl) {
-                status.innerText = 'Starting download: ' + (data.title || 'Video');
-                status.style.color = '#22c55e';
-                window.location.href = data.downloadUrl;
-                return;
-            }
-
-            // Route 2: Fallback if Vercel server IP is flagged by YouTube bot detection
-            status.innerText = 'Bypassing YouTube bot detection...';
-            const videoIdMatch = urlInput.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|v\/))([\w-]{11})/);
-            
-            if (videoIdMatch && videoIdMatch[1]) {
-                const videoId = videoIdMatch[1];
-                const fallbackRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
-                
-                if (fallbackRes.ok) {
-                    const fallbackData = await fallbackRes.json();
-                    const streams = fallbackData.videoStreams || [];
-                    const bestStream = streams.find(s => s.hasVideo && s.hasAudio) || streams[0];
-
-                    if (bestStream && bestStream.url) {
-                        status.innerText = 'Download starting!';
-                        status.style.color = '#22c55e';
-                        window.location.href = bestStream.url;
-                        return;
-                    }
-                }
-            }
-
-            throw new Error(data.error || 'Unable to bypass YouTube sign-in block.');
-
-        } catch (err) {
-            console.error(err);
-            status.innerText = 'Error: ' + err.message;
-            status.style.color = '#ef4444';
-        } finally {
-            btn.disabled = false;
-        }
+        // Load third-party extraction widget frame
+        frame.src = `https://loader.to/api/card/?url=https://www.youtube.com/watch?v=${videoId}`;
+        frame.style.display = 'block';
     }
 </script>
 
