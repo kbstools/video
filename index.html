@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Media Downloader</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: #1e293b;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 480px;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; text-align: center; }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            background: #0f172a;
+            color: white;
+            box-sizing: border-box;
+            margin-bottom: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background: #3b82f6;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:disabled { background: #64748b; cursor: not-allowed; }
+        #status { margin-top: 1rem; font-size: 0.9rem; text-align: center; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>Local Video Downloader</h1>
+    <input type="text" id="videoUrl" placeholder="Paste YouTube, Twitter, or TikTok URL..." />
+    <button id="downloadBtn" onclick="startDownload()">Download Video</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    async function startDownload() {
+        const url = document.getElementById('videoUrl').value.trim();
+        const status = document.getElementById('status');
+        const btn = document.getElementById('downloadBtn');
+
+        if (!url) return alert('Please enter a URL');
+
+        btn.disabled = true;
+        status.innerText = 'Processing video on local server...';
+
+        try {
+            const response = await fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+
+            if (!response.ok) throw new Error('Download failed');
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = 'video.mp4';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            status.innerText = 'Download complete!';
+        } catch (err) {
+            status.innerText = 'Error downloading video. Check server logs.';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
