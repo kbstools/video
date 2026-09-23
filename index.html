@@ -43,21 +43,36 @@
             color: white;
             font-weight: bold;
             cursor: pointer;
+            transition: background 0.2s;
         }
+        button:hover { background: #2563eb; }
         button:disabled { background: #64748b; cursor: not-allowed; }
-        #status { margin-top: 1rem; font-size: 0.9rem; text-align: center; color: #94a3b8; }
+        #status { 
+            margin-top: 1rem; 
+            font-size: 0.9rem; 
+            text-align: center; 
+            color: #94a3b8; 
+            word-break: break-word;
+        }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h1>Video Downloader</h1>
-    <input type="text" id="videoUrl" placeholder="Paste YouTube, Twitter, or TikTok URL..." />
+    <input type="text" id="videoUrl" placeholder="Paste YouTube Video URL..." />
     <button id="downloadBtn" onclick="startDownload()">Download Video</button>
     <div id="status"></div>
 </div>
 
 <script>
+    // Extract YouTube Video ID from various link formats
+    function extractYouTubeId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+
     async function startDownload() {
         const urlInput = document.getElementById('videoUrl').value.trim();
         const status = document.getElementById('status');
@@ -69,37 +84,62 @@
             return;
         }
 
+        const videoId = extractYouTubeId(urlInput);
+        if (!videoId) {
+            status.innerText = 'Invalid YouTube URL provided.';
+            status.style.color = '#ef4444';
+            return;
+        }
+
         btn.disabled = true;
-        status.innerText = 'Processing video...';
+        status.innerText = 'Extracting download streams...';
         status.style.color = '#94a3b8';
 
-        try {
-            const response = await fetch('https://api.cobalt.tools/api/json', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ url: urlInput })
-            });
+        // Public CORS-friendly Piped API instances
+        const pipedInstances = [
+            'https://pipedapi.kavin.rocks',
+            'https://api.piped.privacydev.net',
+            'https://pipedapi.mha.fi'
+        ];
 
-            const data = await response.json();
+        let downloadUrl = null;
 
-            if (data.url) {
-                status.innerText = 'Download starting...';
-                status.style.color = '#22c55e';
-                window.location.href = data.url;
-            } else if (data.picker) {
-                window.location.href = data.picker[0].url;
-            } else {
-                throw new Error(data.text || 'Unable to process link.');
+        for (const instance of pipedInstances) {
+            try {
+                status.innerText = `Connecting to API instance...`;
+                const response = await fetch(`${instance}/streams/${videoId}`);
+                
+                if (!response.ok) continue;
+
+                const data = await response.json();
+
+                // Find stream with both audio and video or highest combined quality
+                if (data.videoStreams && data.videoStreams.length > 0) {
+                    const progressiveStreams = data.videoStreams.filter(s => s.hasVideo && s.hasAudio);
+                    
+                    if (progressiveStreams.length > 0) {
+                        downloadUrl = progressiveStreams[0].url;
+                    } else {
+                        downloadUrl = data.videoStreams[0].url;
+                    }
+                    
+                    if (downloadUrl) break;
+                }
+            } catch (e) {
+                console.warn(`Instance ${instance} failed, trying fallback...`);
             }
-        } catch (err) {
-            status.innerText = 'Error: ' + err.message;
-            status.style.color = '#ef4444';
-        } finally {
-            btn.disabled = false;
         }
+
+        if (downloadUrl) {
+            status.innerText = 'Download starting...';
+            status.style.color = '#22c55e';
+            window.location.href = downloadUrl;
+        } else {
+            status.innerText = 'Error: Public API endpoints blocked or unreachable. Serverless backends are recommended for GitHub Pages.';
+            status.style.color = '#ef4444';
+        }
+
+        btn.disabled = false;
     }
 </script>
 
