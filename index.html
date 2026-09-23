@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Downloader</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: #0f172a;
@@ -14,7 +18,9 @@
             align-items: center;
             min-height: 100vh;
             margin: 0;
+            padding: 20px;
         }
+
         .card {
             background: #1e293b;
             padding: 2rem;
@@ -23,7 +29,18 @@
             width: 100%;
             max-width: 480px;
         }
-        h1 { font-size: 1.5rem; margin-bottom: 1rem; text-align: center; }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
         input {
             width: 100%;
             padding: 12px;
@@ -31,9 +48,14 @@
             border-radius: 6px;
             background: #0f172a;
             color: white;
-            box-sizing: border-box;
-            margin-bottom: 1rem;
+            font-size: 14px;
+            outline: none;
         }
+
+        input:focus {
+            border-color: #3b82f6;
+        }
+
         button {
             width: 100%;
             padding: 12px;
@@ -41,17 +63,26 @@
             border-radius: 6px;
             background: #3b82f6;
             color: white;
+            font-size: 15px;
             font-weight: bold;
             cursor: pointer;
             transition: background 0.2s;
         }
-        button:hover { background: #2563eb; }
-        button:disabled { background: #64748b; cursor: not-allowed; }
-        #status { 
-            margin-top: 1rem; 
-            font-size: 0.9rem; 
-            text-align: center; 
-            color: #94a3b8; 
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            text-align: center;
+            color: #94a3b8;
             word-break: break-word;
         }
     </style>
@@ -60,18 +91,16 @@
 
 <div class="card">
     <h1>Video Downloader</h1>
-    <input type="text" id="videoUrl" placeholder="Paste YouTube Video URL..." />
+    <div class="input-group">
+        <input type="text" id="videoUrl" placeholder="Paste YouTube Video URL..." />
+    </div>
     <button id="downloadBtn" onclick="startDownload()">Download Video</button>
     <div id="status"></div>
 </div>
 
 <script>
-    // Extract YouTube Video ID from various link formats
-    function extractYouTubeId(url) {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-        const match = url.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : null;
-    }
+    // Connected to your live Vercel backend endpoint
+    const BACKEND_API_URL = 'https://ytdl-backend-pi.vercel.app/api/download';
 
     async function startDownload() {
         const urlInput = document.getElementById('videoUrl').value.trim();
@@ -84,62 +113,37 @@
             return;
         }
 
-        const videoId = extractYouTubeId(urlInput);
-        if (!videoId) {
-            status.innerText = 'Invalid YouTube URL provided.';
-            status.style.color = '#ef4444';
-            return;
-        }
-
         btn.disabled = true;
-        status.innerText = 'Extracting download streams...';
+        status.innerText = 'Processing video on serverless backend...';
         status.style.color = '#94a3b8';
 
-        // Public CORS-friendly Piped API instances
-        const pipedInstances = [
-            'https://pipedapi.kavin.rocks',
-            'https://api.piped.privacydev.net',
-            'https://pipedapi.mha.fi'
-        ];
+        try {
+            const response = await fetch(BACKEND_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: urlInput })
+            });
 
-        let downloadUrl = null;
+            const data = await response.json();
 
-        for (const instance of pipedInstances) {
-            try {
-                status.innerText = `Connecting to API instance...`;
-                const response = await fetch(`${instance}/streams/${videoId}`);
+            if (data.downloadUrl) {
+                status.innerText = 'Starting download: ' + (data.title || 'Video');
+                status.style.color = '#22c55e';
                 
-                if (!response.ok) continue;
-
-                const data = await response.json();
-
-                // Find stream with both audio and video or highest combined quality
-                if (data.videoStreams && data.videoStreams.length > 0) {
-                    const progressiveStreams = data.videoStreams.filter(s => s.hasVideo && s.hasAudio);
-                    
-                    if (progressiveStreams.length > 0) {
-                        downloadUrl = progressiveStreams[0].url;
-                    } else {
-                        downloadUrl = data.videoStreams[0].url;
-                    }
-                    
-                    if (downloadUrl) break;
-                }
-            } catch (e) {
-                console.warn(`Instance ${instance} failed, trying fallback...`);
+                // Redirects browser directly to the media stream URL
+                window.location.href = data.downloadUrl;
+            } else {
+                throw new Error(data.error || 'Failed to extract download URL.');
             }
-        }
-
-        if (downloadUrl) {
-            status.innerText = 'Download starting...';
-            status.style.color = '#22c55e';
-            window.location.href = downloadUrl;
-        } else {
-            status.innerText = 'Error: Public API endpoints blocked or unreachable. Serverless backends are recommended for GitHub Pages.';
+        } catch (err) {
+            console.error(err);
+            status.innerText = 'Error: ' + err.message;
             status.style.color = '#ef4444';
+        } finally {
+            btn.disabled = false;
         }
-
-        btn.disabled = false;
     }
 </script>
 
